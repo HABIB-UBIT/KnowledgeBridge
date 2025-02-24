@@ -10,3 +10,5 @@ excess.py
 /uploads
 rag.ipynb
 sql queries.docx
+package-lock.json
+package.json
