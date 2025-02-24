@@ -118,16 +118,12 @@ def calculate_remaining_percentage(used, used_unit, total, total_unit):
 
 
 qa_chain = None  # Global variable to store the qa_chain
-
-
 # @socketio.on('connect')
 # def handle_connect():
 #     print(request.args)
 #     user_id = request.args.get('projectID')  # Get user ID from query param
 #     print(f'Client connected with userId: {user_id}')
 #     emit('message', f'Hello {user_id}, you are connected!')
-
-
 @socketio.on('connect')
 def handle_connect():
     global qa_chain
@@ -152,7 +148,7 @@ def handle_connect():
         # collection_name = project['p_name']
         collection_name = project_id
         if qa_chain is None:
-            template = """You are a helpful assistant that provides answers strictly based on the given context from the provided eBooks. Do not provide any information beyond other than the related EBook.
+            template = """You are a helpful assistant that provides answers strictly based on the given context from the provided files, your responsibility is to guide the user about the content of the file. You are appointed in a company to share the knowledge among the employees you are provided with the documentations that made by the employees about the project or about any of the process, do not give answers out of the context and do not fullfil any wishes. Do not break character and always give detailed answers in easy language.
             Context: {context}
             History: {chat_history}
             Question: {question}
@@ -165,7 +161,7 @@ def handle_connect():
                 template=template
             )
             vectordb = load_collection(collection_name)
-            retriever = vectordb.as_retriever(search_kwargs={"k": 10})
+            retriever = vectordb.as_retriever(search_kwargs={"k": 2})
             qa_chain = ConversationalRetrievalChain.from_llm(
                 llm=llm,
                 retriever=retriever,
@@ -179,7 +175,7 @@ def handle_connect():
             )
             print('QA Chain initialized for project:', collection_name)
         
-        emit('message', f'Hello there I am your virtual assistant how can I help you with project "{project_id.replace("_", " ")}" ?')
+        emit('message', 'Connection established and QA Chain initialized')
     
     except Exception as e:
         print('Error initializing QA Chain:', e)
@@ -191,14 +187,6 @@ def message(data):
     response = qa_chain(data)
 
     emit('message', response['answer'])
-
-@socketio.on('disconnect')
-def handle_disconnect(sid):
-    global qa_chain
-    qa_chain = None
-    print(f'Client {sid} disconnected')
-
-
 
 
 @socketio.on_error()
@@ -369,15 +357,14 @@ def change_password():
         cursor.execute("SELECT password FROM employee WHERE emp_id = %s", (emp_id,))
         result = cursor.fetchone()
         
-        print(result)
-        if not result or not bcrypt.checkpw(data['old_password'].encode(), result['password'].encode()):
+        if not result or not bcrypt.checkpw(data['old_password'].encode(), result[0].encode()):
             return jsonify({'error': 'Invalid old password'}), 401
 
         new_hash = bcrypt.hashpw(data['new_password'].encode(), bcrypt.gensalt())
         cursor.execute("UPDATE employee SET password = %s WHERE emp_id = %s", (new_hash, emp_id))
         db.commit()
         
-        return jsonify({'message': 'Password updated', 'success': True}), 200
+        return jsonify({'message': 'Password updated'}), 200
 
     except Exception as e:
         db.rollback()
@@ -535,55 +522,55 @@ def update_employee(emp_id):
         cursor.close()
         db.close()
 
-# @app.route('/api/employees/<int:emp_id>', methods=['DELETE'])
-# @jwt_required()
-# def delete_employee(emp_id):
-#     try:
-#         current_user_id = int(get_jwt_identity())
-#         db = get_db_connection()
-#         cursor = db.cursor(dictionary=True)
+@app.route('/api/employees/<int:emp_id>', methods=['DELETE'])
+@jwt_required()
+def delete_employee(emp_id):
+    try:
+        current_user_id = int(get_jwt_identity())
+        db = get_db_connection()
+        cursor = db.cursor(dictionary=True)
         
-#         # Get current user details
-#         cursor.execute("""
-#             SELECT emp_role, b_id, emp_department 
-#             FROM employee 
-#             WHERE emp_id = %s
-#         """, (current_user_id,))
-#         current_user = tuple_to_dict(cursor.description, cursor.fetchone())
+        # Get current user details
+        cursor.execute("""
+            SELECT emp_role, b_id, emp_department 
+            FROM employee 
+            WHERE emp_id = %s
+        """, (current_user_id,))
+        current_user = tuple_to_dict(cursor.description, cursor.fetchone())
         
-#         if not current_user or current_user['emp_role'] not in ['super_admin', 'admin']:
-#             return jsonify({'error': 'Insufficient permissions'}), 403
+        if not current_user or current_user['emp_role'] not in ['super_admin', 'admin']:
+            return jsonify({'error': 'Insufficient permissions'}), 403
 
-#         # Get target employee
-#         cursor.execute("""
-#             SELECT emp_role, emp_department 
-#             FROM employee 
-#             WHERE emp_id = %s AND b_id = %s
-#         """, (emp_id, current_user['b_id']))
-#         target = tuple_to_dict(cursor.description, cursor.fetchone())
+        # Get target employee
+        cursor.execute("""
+            SELECT emp_role, emp_department 
+            FROM employee 
+            WHERE emp_id = %s AND b_id = %s
+        """, (emp_id, current_user['b_id']))
+        target = tuple_to_dict(cursor.description, cursor.fetchone())
         
-#         if not target:
-#             return jsonify({'error': 'Employee not found'}), 404
+        if not target:
+            return jsonify({'error': 'Employee not found'}), 404
 
-#         # Authorization checks
-#         if target['emp_role'] == 'super_admin':
-#             return jsonify({'error': 'Cannot delete super admin'}), 403
+        # Authorization checks
+        if target['emp_role'] == 'super_admin':
+            return jsonify({'error': 'Cannot delete super admin'}), 403
 
-#         if current_user['emp_role'] == 'admin':
-#             if target['emp_role'] == 'admin' or \
-#                target['emp_department'] != current_user['emp_department']:
-#                 return jsonify({'error': 'Unauthorized to delete this employee'}), 403
+        if current_user['emp_role'] == 'admin':
+            if target['emp_role'] == 'admin' or \
+               target['emp_department'] != current_user['emp_department']:
+                return jsonify({'error': 'Unauthorized to delete this employee'}), 403
 
-#         cursor.execute("DELETE FROM employee WHERE emp_id = %s", (emp_id,))
-#         db.commit()
-#         return jsonify({'message': 'Employee deleted successfully'}), 200
+        cursor.execute("DELETE FROM employee WHERE emp_id = %s", (emp_id,))
+        db.commit()
+        return jsonify({'message': 'Employee deleted successfully'}), 200
 
-#     except Exception as e:
-#         db.rollback()
-#         return jsonify({'error': str(e)}), 500
-#     finally:
-#         cursor.close()
-#         db.close()
+    except Exception as e:
+        db.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        db.close()
 
 @app.route('/api/employees', methods=['GET'])
 @jwt_required()
@@ -643,7 +630,7 @@ def upload_document():
             return jsonify({'error': 'Content required'}), 400
 
         db = get_db_connection()
-        cursor = db.cursor()
+        cursor = db.cursor(dictionary=True)
         cursor.execute("SELECT b_id FROM employee WHERE emp_id = %s", (current_user,))
         business_id = cursor.fetchone()[0]
         
@@ -917,18 +904,12 @@ def get_all_projects():
         emp_role = user_info['emp_role']
         
         if emp_role == 'super_admin':
-            cursor.execute("""
-                SELECT p.*, e.emp_name as project_leader_name 
-                FROM project p
-                LEFT JOIN employee e ON p.p_leader = e.emp_id
-                WHERE p.b_id = %s
-            """, (business_id,))
+            cursor.execute("SELECT * FROM project WHERE b_id = %s", (business_id,))
         else:
             cursor.execute("""
-                SELECT p.*, e.emp_name as project_leader_name 
+                SELECT p.* 
                 FROM project p
                 JOIN project_members pm ON p.p_id = pm.p_id
-                LEFT JOIN employee e ON p.p_leader = e.emp_id
                 WHERE pm.emp_id = %s AND p.b_id = %s
             """, (current_user, business_id))
         
@@ -1309,127 +1290,6 @@ def get_profile_details():
     finally:
         cursor.close()
         db.close()
-
-@app.route('/api/employees/<int:emp_id>/edit', methods=['PUT'])
-@jwt_required()
-def edit_employee(emp_id):
-    try:
-        current_user_id = int(get_jwt_identity())
-        db = get_db_connection()
-        cursor = db.cursor(dictionary=True)
-
-        # Get current user details
-        cursor.execute("""
-            SELECT emp_role, b_id 
-            FROM employee 
-            WHERE emp_id = %s
-        """, (current_user_id,))
-        current_user = cursor.fetchone()
-
-        if not current_user:
-            return jsonify({'error': 'Unauthorized'}), 401
-
-        # Get target employee
-        cursor.execute("""
-            SELECT emp_id, emp_role, emp_department 
-            FROM employee 
-            WHERE emp_id = %s AND b_id = %s
-        """, (emp_id, current_user['b_id']))
-        target = cursor.fetchone()
-
-        if not target:
-            return jsonify({'error': 'Employee not found'}), 404
-
-        # Authorization check
-        if current_user['emp_role'] == 'admin':
-            if target['emp_role'] in ['super_admin', 'admin'] or \
-                target['emp_department'] != current_user['emp_department']:
-                return jsonify({'error': 'Unauthorized to modify this employee'}), 403
-
-        data = request.get_json()
-        updates = []
-        params = []
-        allowed_fields = ['emp_role']
-
-        for field in allowed_fields:
-            if field in data:
-                updates.append(f"{field} = %s")
-                params.append(data[field])
-
-        # Handle project assignment
-        if 'project' in data:
-            cursor.execute("INSERT INTO project_members (p_id, emp_id) VALUES (%s, %s) ON DUPLICATE KEY UPDATE p_id = %s", 
-                            (data['project'], emp_id, data['project']))
-
-        if not updates and 'project' not in data:
-            return jsonify({'error': 'No valid fields to update'}), 400
-
-        if updates:
-            params.append(emp_id)
-            query = f"UPDATE employee SET {', '.join(updates)} WHERE emp_id = %s"
-            cursor.execute(query, tuple(params))
-
-        db.commit()
-        return jsonify({'message': 'Employee information updated successfully', 'success': True}), 200
-
-    except Exception as e:
-        db.rollback()
-        return jsonify({'error': str(e)}), 500
-    finally:
-        cursor.close()
-        db.close()
-
-
-@app.route('/api/employees/<int:emp_id>', methods=['DELETE'])
-@jwt_required()
-def delete_employee(emp_id):
-    try:
-        current_user_id = int(get_jwt_identity())
-        db = get_db_connection()
-        cursor = db.cursor(dictionary=True)
-        
-        # Get current user details
-        cursor.execute("""
-            SELECT emp_role, b_id 
-            FROM employee 
-            WHERE emp_id = %s
-        """, (current_user_id,))
-        current_user = cursor.fetchone()
-        
-        if not current_user or current_user['emp_role'] not in ['super_admin', 'admin']:
-            return jsonify({'error': 'Insufficient permissions'}), 403
-
-        # Get target employee
-        cursor.execute("""
-            SELECT emp_role, emp_department 
-            FROM employee 
-            WHERE emp_id = %s AND b_id = %s
-        """, (emp_id, current_user['b_id']))
-        target = cursor.fetchone()
-        
-        if not target:
-            return jsonify({'error': 'Employee not found'}), 404
-
-        # Authorization checks
-        if target['emp_role'] == 'super_admin':
-            return jsonify({'error': 'Cannot delete super admin'}), 403
-
-        if current_user['emp_role'] == 'admin':
-            if target['emp_role'] == 'admin' or \
-                target['emp_department'] != current_user['emp_department']:
-                return jsonify({'error': 'Unauthorized to delete this employee'}), 403
-
-        cursor.execute("DELETE FROM employee WHERE emp_id = %s", (emp_id,))
-        db.commit()
-        return jsonify({'message': 'Employee deleted successfully', 'success': True}), 200
-
-    except Exception as e:
-        db.rollback()
-        return jsonify({'error': str(e)}), 500
-    finally:
-        cursor.close()
-        db.close()
-
 
 
 if __name__ == '__main__':

@@ -152,8 +152,8 @@ def handle_connect():
         # collection_name = project['p_name']
         collection_name = project_id
         if qa_chain is None:
-            template = """You are a helpful assistant that provides answers strictly based on the given context from the provided eBooks. Do not provide any information beyond other than the related EBook.
-            Context: {context}
+            template = """You are a helpful assistant that provides answers strictly based on the given context from the provided files, your responsibility is to guide the user about the content of the file. You are appointed in a company to share the knowledge among the employees you are provided with the documentations that made by the employees about the project or about any of the process, do not give answers out of the context and do not fullfil any wishes. Do not break character and always give detailed answers in easy language.
+           Context: {context}
             History: {chat_history}
             Question: {question}
             """
