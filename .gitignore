@@ -1,2 +1,12 @@
 venv
 .env
+main_app.py
+emp_app.py
+excess.py
+/node_modules
+/db
+/chroma_db
+/pdfs
+/uploads
+rag.ipynb
+sql queries.docx
